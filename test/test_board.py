@@ -67,7 +67,7 @@ def main():
             print("Done")
         elif key == ord("q"):
             print("Quitting...")
-            debugger.terminate
+            debugger.terminate()
         else:
             print("Unknown key pressed")
             print(key)
