@@ -30,12 +30,17 @@ class Board:
         self.radius = self.size // 2
         assert strategy in self.STRATEGIES, f"Invalid strategy: {strategy}"
         self.strategy = strategy
+        self.ink = int(0.6 * self.size / self.straw_count * 255)
+        self.randomizer = self.pin_count // 2
+
         self.setup_pins()
         self.setup_straws()
         self.setup_mask()
         self.setup_target()
+        self.counter = np.zeros((self.size, self.size), dtype=np.uint16)
         self.result = np.ones((self.size, self.size), dtype=self.image.dtype) * 255
-        self.create_diff()
+        self.tmp = np.zeros((self.size, self.size), dtype=np.int16)
+        self.calculate_q()
 
     def setup_target(self):
         h, w = self.image.shape[:2]
@@ -93,32 +98,26 @@ class Board:
         self.weight[self.mask == 0] = 0
         self.weight = self.weight / np.sum(self.weight)
 
-    def draw_result(self, mask: bool = True):
-        result = np.zeros((self.size, self.size), dtype=np.int16)
-        self.result.fill(0)
-        tmp = np.zeros((self.size, self.size), dtype=np.int16)
-        ink = int(0.6 * self.size / self.straw_count * 255)
-        # ink = 255
-        for straw in self.straws:
-            pt1 = tuple(self.pins[straw[0]])
-            pt2 = tuple(self.pins[straw[1]])
-            # tmp.fill(0)
-            cv2.line(tmp, pt1, pt2, ink, self.thickness)
-            result = result + tmp
-            cv2.line(tmp, pt1, pt2, 0, self.thickness)
-        # self.result[self.result > 255] = 255
-        # masked = self.result.copy()
-        result[self.mask == 0] = 0
-        # max_intensity = np.max(masked)
-        result = 255 - result  # invert, and scale
-        self.result = np.clip(result, 0, 255).astype(np.uint8)
-        # self.result[self.result > 255] = (
-        #     255  # ensure max is 255, as we only looked at the max in the masked area
-        # )
+    def update_result(self, mask: bool = True):
+        self.result = np.clip(255 - self.counter, 0, 255).astype(np.uint8)
         if mask:
             self.result[self.mask == 0] = 128
 
-    def create_diff(self):
+    def reset_counter(self, mask: bool = True):
+        result = np.zeros((self.size, self.size), dtype=np.int16)
+        self.result.fill(0)
+        self.counter.fill(0)
+        for straw in self.straws:
+            pt1 = tuple(self.pins[straw[0]])
+            pt2 = tuple(self.pins[straw[1]])
+            cv2.line(self.tmp, pt1, pt2, self.ink, self.thickness)
+            self.counter = self.counter + self.tmp
+            cv2.line(self.tmp, pt1, pt2, 0, self.thickness)
+        hist = np.bincount(self.counter.flatten(), minlength=256)
+        print(hist)
+        self.update_result(mask)
+
+    def calculate_q(self):
 
         self.diff = np.subtract(
             self.target.astype(np.float64), self.result.astype(np.float64)
@@ -138,17 +137,48 @@ class Board:
         old_straws = self.straws.copy()
         old_result = self.result.copy()
         old_diff = self.diff.copy()
+        old_count = self.counter.copy()
         i = np.random.randint(0, self.straw_count)
         if self.strategy == self.STRATEGIES["random"]:
-            p1 = np.random.randint(0, self.pin_count)
-            p2 = np.random.randint(0, self.pin_count)
+            p1 = (
+                self.straws[i, 0] + np.random.randint(-self.randomizer, self.randomizer)
+            ) % self.pin_count
+            p2 = (
+                self.straws[i, 1] + np.random.randint(-self.randomizer, self.randomizer)
+            ) % self.pin_count
+            # p1 = np.random.randint(0, self.pin_count)
+            # p2 = np.random.randint(0, self.pin_count)
+            old_s = self.straws[i : i + 1].copy()
             self.straws[i] = [p1, p2]
+            new_s = self.straws[i : i + 1].copy()
         elif self.strategy == self.STRATEGIES["single"]:
-            p1 = np.random.randint(0, self.pin_count)
+            # p1 = np.random.randint(0, self.pin_count)
+            p1 = (
+                self.straws[i, 1] + np.random.randint(-self.randomizer, self.randomizer)
+            ) % self.pin_count
+            old_s = self.straws[i : i + 2].copy()
             self.straws[i, 1] = p1
             self.straws[(i + 1) % self.straw_count, 0] = p1
-        self.draw_result()
-        self.create_diff()
+            new_s = self.straws[i : i + 2].copy()
+
+        for straw in old_s:
+            pt1 = tuple(self.pins[straw[0]])
+            pt2 = tuple(self.pins[straw[1]])
+            cv2.line(self.tmp, pt1, pt2, self.ink, self.thickness)
+            self.counter = self.counter - self.tmp
+            cv2.line(self.tmp, pt1, pt2, 0, self.thickness)
+        for straw in new_s:
+            pt1 = tuple(self.pins[straw[0]])
+            pt2 = tuple(self.pins[straw[1]])
+            cv2.line(self.tmp, pt1, pt2, self.ink, self.thickness)
+            self.counter = self.counter + self.tmp
+            cv2.line(self.tmp, pt1, pt2, 0, self.thickness)
+        # print(f"{np.sum(self.counter)}")
+        # self.draw_result(True)
+        # print(f"{np.sum(self.counter)}")
+        self.update_result(True)
+        self.calculate_q()
+        assert np.sum(self.tmp) == 0, f"tmp not empty {np.sum(self.tmp)}"
 
         if old_q < self.quality:
             diff = old_q - self.quality
@@ -160,65 +190,10 @@ class Board:
                 self.result = old_result
                 self.diff = old_diff
                 self.quality = old_q
+                self.counter = old_count
                 return False
             # print("temp accepted")
             return True
         else:
             # print("accepted")
             return True
-        # step_size = 4
-        # new_straws = self.straws.copy()
-        # straw = np.random.randint(0, len(new_straws))
-        # i = np.random.randint(-step_size, step_size + 1)
-        # j = np.random.randint(-step_size, step_size + 1)
-        # s = (new_straws[straw][0] + i) % self.pin_count
-        # e = (new_straws[straw][1] + j) % self.pin_count
-        # while s == e:
-        #     j = np.random.randint(-step_size, step_size + 1)
-        #     e = (new_straws[straw][1] + j) % self.pin_count
-        # new_straws[straw] = [s, e]
-        # print(f"{self.straws[straw]}->{new_straws[straw]}, ")
-        # old_match, oimg = self.match_image(self.straws)
-        # new_match, nimg = self.match_image(new_straws)
-
-        # print(old_match, new_match)
-        # accepted = False
-        # if new_match < old_match:
-        #     self.straws = new_straws
-        #     print("accepted")
-        #     accepted = True
-        # else:
-        #     print("old match",old_match)
-        #     print("new match",new_match)
-        #     #accept with probability
-        #     prob=np.exp((old_match-new_match)/0.0001)
-        #     if np.random.random()<prob:
-        #         self.straws=new_straws
-        #         print("accepted")
-        #         accepted=True
-        #     else:
-        #         print("rejected")
-        # if accepted:
-        #     self.straws = new_straws
-        #     return nimg
-        # return oimg
-
-    def draw(self, img):
-        """
-        Draw the board on the image.
-        :param img: The image to draw on.
-        """
-        img.fill(255)
-        for pos in self.pins:
-            cv2.circle(img, tuple(pos), 2, (0, 0, 0), -1)
-        for straw in self.straws:
-            pt1 = tuple(self.pins[straw[0]])
-            pt2 = tuple(self.pins[straw[1]])
-            overlay = img.copy()
-            cv2.line(overlay, pt1, pt2, (0, 0, 0), 1)
-            weight = 0.5
-            cv2.addWeighted(overlay, weight, img, 1 - weight, 0, img)
-        # cv2.circle(iomg, tuple(self.center), self.radius, (0, 0, 0), 1)
-        # cv2.line(img, tuple(self.center), tuple(self.pin_positions[0]), (0, 0, 255), 1)
-        # cv2.line(img, tuple(self.center), tuple(self.pin_positions[1]), (255, 0, 0), 1)
-        self.match_image()
