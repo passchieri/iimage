@@ -1,0 +1,110 @@
+
+[project]
+authors = [{name = "Igor Passchier", email = "igor.passchier@gmail.com"}] 
+classifiers = [
+  "License :: MIT ",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+] 
+dependencies = [
+"opencv-python",
+"numpy",
+] 
+description = "Igors image library" 
+dynamic = ["version"] 
+license = {text = "MIT"} 
+name = "iimage" 
+requires-python = ">=3.9,<4.0" 
+
+[project.urls]
+#"Bug Tracker" = "https://Z003KBKV@dev.azure.com/Z003KBKV/Simulytic/_git/psimclient"
+#Homepage = "https://Z003KBKV@dev.azure.com/Z003KBKV/Simulytic/_git/psimclient"
+
+[project.scripts]
+iimage = "iimage:cli"
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+  "setuptools>=69",
+  "setuptools_scm[toml]>=8.0", # "setuptools_scm_git_semver",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools_scm]
+# local_scheme = "time-dot-node"
+normalize = true
+# version_scheme = "guess-next-rc"
+fallback_version = "0.0.0"
+
+[tool.setuptools.package-data]
+
+[project.optional-dependencies]
+dev = [
+  "black>=23.0.0",
+  "build>=1.0.0",
+  "flake8-length",
+  "flake8>=4.0.0",
+  "pytest_cov>=4.1",
+  "pytest-mock>=3.14.0",
+  "pytest>=7.2.1",
+  "setuptools_scm[toml]>=8.0",
+  "setuptools>=69",
+  "tox>=4.0",
+  "twine>=4.0.0",
+]
+
+testing = [
+  "pytest_cov>=4.1",
+  "pytest-mock>=3.14.0",
+  "pytest>=7.2.1",
+  "pytest-asyncio>=0.24",
+]
+
+linting = [
+  "black>=23.0.0",
+  "mypy>=1.13.0",
+  "flake8-length",
+  "flake8>=4.0.0",
+]
+
+[tool.mypy]
+exclude = 'venv|site-packages|.vscode|build|test'
+ignore_missing_imports = true
+
+[tool.tox]
+legacy_tox_ini = """
+    [tox]
+    min_version = 4.0
+    env_list =
+        py39
+        py310
+        py311
+        py312
+        py313
+        black
+        flake8
+        mypy
+
+    [testenv]
+    package = wheel
+    commands = pytest -v test
+    extras = testing
+    allowlist_externals = pytest
+
+
+    [testenv:black]
+    extras = linting
+    commands = black --check --diff src
+
+    [testenv:flake8]
+    extras = linting
+    commands = flake8 src
+
+    [testenv:mypy]
+    extras = linting
+    commands = mypy src
+
+"""
