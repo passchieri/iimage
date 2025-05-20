@@ -14,6 +14,7 @@ class DebugWindow:
         self.width = width
         self.height = height
         self.count = count
+        self.running = True
         self.canvas = (
             np.ones((height + 2, (width + 1) * count + 1, 3), dtype=np.uint8) * 255
         )
@@ -56,8 +57,11 @@ class DebugWindow:
 
     def terminate(self):
         cv2.destroyAllWindows()
+        self.running = False
 
     def wait_key(self, delay: int = 100):
+        if not self.running:
+            return 0
         k = 255
         while k == 255:
             k = cv2.waitKey(delay) & 0xFF

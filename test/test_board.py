@@ -21,7 +21,7 @@ def main():
         h, w = img.shape[:2]
     # img[:, :] = 255
     # img[:, w // 2 :] = 0
-    board = Board(img, operating_size=200, pins=180, straws=1000)
+    board = Board(img, operating_size=200, pins=180, straws=500)
     debugger.draw_image(board.image, 0)
     debugger.draw_image(board.target, 1)
     board.draw_result()
