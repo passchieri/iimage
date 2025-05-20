@@ -6,20 +6,30 @@ SIZE = 200
 
 
 class Board:
+    STRATEGIES = {
+        "random": "random",
+        "single": "single",
+    }
+
     def __init__(
         self,
         image: cv2.typing.MatLike,
         operating_size: int = 200,
         pins: int = 60,
         straws: int = 1000,
+        thickness: int = 1,
+        strategy: str = "random",
     ):
 
         self.size = operating_size if operating_size else min(image.shape[:2])
         self.pin_count = pins
         self.straw_count = straws
         self.image = image.copy()
+        self.thickness = thickness
         self.center = np.array([self.size // 2, self.size // 2])
         self.radius = self.size // 2
+        assert strategy in self.STRATEGIES, f"Invalid strategy: {strategy}"
+        self.strategy = strategy
         self.setup_pins()
         self.setup_straws()
         self.setup_mask()
@@ -55,11 +65,17 @@ class Board:
         self.pins = np.clip(self.pins, 0, self.size)
 
     def setup_straws(self):
-        p1 = p2 = np.random.randint(0, self.pin_count, self.straw_count)
-        p2 = np.random.randint(0, self.pin_count, self.straw_count)
-        for i in range(self.straw_count):
-            while p2[i] == p1[i]:
-                p2[i] = np.random.randint(0, self.pin_count)
+        if self.strategy == self.STRATEGIES["random"]:
+            p1 = np.random.randint(0, self.pin_count, self.straw_count)
+            p2 = np.random.randint(0, self.pin_count, self.straw_count)
+        elif self.strategy == self.STRATEGIES["single"]:
+            p1 = np.random.randint(0, self.pin_count, self.straw_count)
+            p2 = np.zeros(self.straw_count, dtype=np.int32)
+            for i in range(self.straw_count - 1):
+                p2[i] = p1[i + 1]
+            p2[-1] = p1[0]
+        else:
+            raise ValueError(f"Invalid strategy: {self.strategy}")
         self.straws = np.stack((p1, p2), axis=1)
 
     def setup_mask(self):
@@ -86,9 +102,10 @@ class Board:
         for straw in self.straws:
             pt1 = tuple(self.pins[straw[0]])
             pt2 = tuple(self.pins[straw[1]])
-            tmp.fill(0)
-            cv2.line(tmp, pt1, pt2, ink, 1)
+            # tmp.fill(0)
+            cv2.line(tmp, pt1, pt2, ink, self.thickness)
             result = result + tmp
+            cv2.line(tmp, pt1, pt2, 0, self.thickness)
         # self.result[self.result > 255] = 255
         # masked = self.result.copy()
         result[self.mask == 0] = 0
@@ -122,12 +139,14 @@ class Board:
         old_result = self.result.copy()
         old_diff = self.diff.copy()
         i = np.random.randint(0, self.straw_count)
-
-        p1 = p2 = np.random.randint(0, self.pin_count)
-        p2 = np.random.randint(0, self.pin_count)
-        while p2 == p1:
+        if self.strategy == self.STRATEGIES["random"]:
+            p1 = np.random.randint(0, self.pin_count)
             p2 = np.random.randint(0, self.pin_count)
-        self.straws[i] = [p1, p2]
+            self.straws[i] = [p1, p2]
+        elif self.strategy == self.STRATEGIES["single"]:
+            p1 = np.random.randint(0, self.pin_count)
+            self.straws[i, 1] = p1
+            self.straws[(i + 1) % self.straw_count, 0] = p1
         self.draw_result()
         self.create_diff()
 

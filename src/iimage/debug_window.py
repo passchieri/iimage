@@ -28,6 +28,8 @@ class DebugWindow:
         cv2.resizeWindow(
             self.name, height=self.canvas.shape[0], width=self.canvas.shape[1]
         )
+        cv2.imshow(self.name, self.canvas)
+        cv2.waitKey(1) & 0xFF
 
     def draw_image(self, image: np.ndarray, index: int = 0):
         if index >= self.count:
