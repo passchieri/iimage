@@ -92,7 +92,7 @@ class Board:
                 x = 1.0 * (i - self.center[0])
                 y = 1.0 * (j - self.center[1])
                 rr = (x**2 + y**2) / self.radius**2
-                self.weight[i, j] = 1 - 0.5 * rr**0.5
+                self.weight[i, j] = 1 - 0.7 * rr**0.25
         self.weight = np.clip(self.weight, 0, 1)
         # self.weight[:, :] = 1
         self.weight[self.mask == 0] = 0
@@ -197,3 +197,21 @@ class Board:
         else:
             # print("accepted")
             return True
+
+    def total_straw_length(self):
+        """
+        Calculate the total length of all straws combined.
+        :return: Total length (float)
+        """
+        # Get coordinates for all straw endpoints
+        pts1 = self.pins[self.straws[:, 0]]
+        pts2 = self.pins[self.straws[:, 1]]
+        # Compute Euclidean distances for each straw
+        lengths = np.linalg.norm(pts1 - pts2, axis=1)
+        return np.sum(lengths)
+
+    def save(self, filename: str):
+        out = cv2.cvtColor(self.result, cv2.COLOR_GRAY2BGRA)
+
+        out[self.mask == 0, 3] = 0
+        cv2.imwrite(filename, out)
