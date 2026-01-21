@@ -70,3 +70,5 @@ target/
 .ipynb_checkpoints
 env_azure.sh
 /*.png
+/*.jpg
+
