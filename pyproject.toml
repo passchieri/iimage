@@ -16,10 +16,6 @@ license = {text = "MIT"}
 name = "iimage" 
 requires-python = ">=3.9,<4.0" 
 
-[project.urls]
-#"Bug Tracker" = "https://Z003KBKV@dev.azure.com/Z003KBKV/Simulytic/_git/psimclient"
-#Homepage = "https://Z003KBKV@dev.azure.com/Z003KBKV/Simulytic/_git/psimclient"
-
 [project.scripts]
 iimage = "iimage:cli"
 
