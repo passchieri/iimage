@@ -68,7 +68,9 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+#Custom tags
 env_azure.sh
 /*.png
 /*.jpg
-
+.DS_Store
