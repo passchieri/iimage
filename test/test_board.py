@@ -1,121 +1,97 @@
 import cProfile
 import pstats
-from iimage import Board
+from iimage import AbstractBoard, RandomBoard, SingleBoard
 import cv2
 import numpy as np
 from pathlib import Path
 
 from iimage import DebugWindow
 
-FILE = "tessa"
-PINS = 201
-STRAWS = 4000
 
-def main():
-    final = DebugWindow("final", 1200, 1200, 2)
-    debugger = DebugWindow("debugger", 400, 400, 3)
-    img_path = Path(__file__).parent / "resources" / f"{FILE}.jpg"
+def points(size=300, count=1000):
+    return np.random.randint(0, size, size=(count + 1, 2))
 
-    img = cv2.imread(img_path)
-    assert img is not None, "file could not be read, check with os.path.exists()"
-    h, w = img.shape[:2]
-    scale = 1200 / max(h, w)
-    if scale < 1:
-        img = cv2.resize(
-            img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA
+
+def redraw(size=300, points=None):
+    tmp = np.zeros((size, size), dtype=np.int16)
+    for i in range(len(points) - 1):
+        cv2.line(tmp, points[i, :], points[i + 1, :], 1, 1)
+        cv2.line(tmp, points[i, :], points[i + 1, :], 0, 1)
+    return tmp
+
+
+def reset(size=300, points=None):
+    tmp = np.zeros((size, size), dtype=np.int16)
+    for i in range(len(points) - 1):
+        cv2.line(tmp, points[i, :], points[i + 1, :], 1, 1)
+        tmp = np.zeros((size, size), dtype=np.int16)
+    return tmp
+
+
+def copy(size=300, points=None):
+    tmp = np.zeros((size, size), dtype=np.int16)
+    for i in range(len(points) - 1):
+        t = tmp.copy()
+        cv2.line(tmp, points[i, :], points[i + 1, :], 1, 1)
+        tmp = t
+    return tmp
+
+
+def fill(size=300, points=None):
+    tmp = np.zeros((size, size), dtype=np.int16)
+    for i in range(len(points) - 1):
+        cv2.line(tmp, points[i, :], points[i + 1, :], 1, 1)
+        tmp.fill(0)
+    return tmp
+
+
+def f8(x):
+    return "%12.8f" % x
+
+
+def performance():
+    profiler = cProfile.Profile()
+    profiler.enable()
+    pts = points(count=100000)
+    result_redraw = redraw(points=pts)
+    result_reset = reset(points=pts)
+    result_copy = copy(points=pts)
+    result_fill = fill(points=pts)
+    profiler.disable()
+    assert np.all(result_redraw == 0)
+    assert np.all(result_reset == 0)
+    assert np.all(result_copy == 0)
+    assert np.all(result_fill == 0)
+    stats = pstats.Stats(profiler).sort_stats("cumulative")
+    stats.f8 = f8
+    stats.print_stats("test_board")
+
+
+def test_remmove_revert():
+    for BoardClass in [SingleBoard, RandomBoard]:
+        board = BoardClass(
+            np.zeros((300, 300, 3), dtype=np.uint8),
+            operating_size=300,
+            pins=201,
+            straws=4000,
+            thickness=1,
         )
-        h, w = img.shape[:2]
-    board = Board(
-        img,
-        operating_size=300,
-        strategy="single",
-        pins=PINS,
-        straws=STRAWS,
-        thickness=1,
-    )
-    debugger.draw_image(board.image, 0)
-    debugger.draw_image(board.target, 1)
-    board.reset_counter()
-    board.calculate_q()
-    debugger.draw_image(board.result, 2)
-    debugger.draw_image(board.diff, 0)
-    temp = 0.02
-    step_count = 1000
-    print(
-        "Press 't' to reset temperature, 's' to save, 'l' to load, 'r' to run, 'q' to quit"
-    )
-    tc = 0
-    first = True
-    key = ord("r")
-    while first or (key := debugger.wait_key(100)) != 0:
-        first = False
-        if key == ord("t"):
-            temp = 0.02
-        elif key == ord("f"):
-            print("Final...")
-            make_final(final, img, board)
-        elif key == ord("s"):
-            print("Saving...")
-            np.save(f"{FILE}_{board.pin_count}.npy", board.straws)
-        elif key == ord("w"):
-            print("Writing...")
-            board.save(f"{FILE}.png")
-            b = make_final(final, img, board)
-            b.save(f"{FILE}_big.png")
-        elif key == ord("l"):
-            print("Reading...")
-            board.straws = np.load(f"{FILE}_{board.pin_count}.npy")
-            board.reset_counter()
-            board.calculate_q()
-            debugger.draw_image(board.result, 2)
-            debugger.draw_image(board.diff, 0)
-            temp = 1e-6
-        elif key == ord("r"):
-            c = step_count
-            while c > step_count // 100:
-                temp *= 0.9
-                c = 0
-                print("Running...")
-                for _ in range(step_count):
-                    if board.cool_step(temp):
-                        c += 1
-                        tc += 1
-                debugger.draw_image(board.diff, 0)
-                debugger.draw_image(board.result, 2)
-                print(f"{c=}, {temp=:.4e}, {board.quality=:.4f}")
-                if c > 0.9 * step_count:
-                    temp = temp * 0.2
-                # make_final(final, img, board)
-            print(f"Done in {tc=} steps")
-        elif key == ord("q"):
-            print("Quitting...")
-            debugger.terminate()
-        else:
-            print("Unknown key pressed")
-            print(key)
-
-
-def make_final(final, img, board):
-    b = Board(
-        img,
-        operating_size=1200,
-        strategy=board.strategy,
-        pins=board.pin_count,
-        straws=board.straw_count,
-        thickness=board.thickness,
-    )
-    b.straws = board.straws.copy()
-    b.reset_counter()
-    b.calculate_q()
-    final.draw_image(b.image, 0)
-    final.draw_image(b.result, 1)
-    return b
+        straws = board.straws.copy()
+        for i in range(board.straw_count):
+            old_s = board.move_straw(i)
+            assert not np.all(
+                straws == board.straws
+            ), f"Straws were not moved correctly for {BoardClass.__name__} {i=}"
+            board.revert_straw(i, old_s)
+            assert np.all(
+                straws == board.straws
+            ), f"Straws were not reverted correctly for {BoardClass.__name__} {i=}"
 
 
 if __name__ == "__main__":
-    profiler = cProfile.Profile()
+    # profiler = cProfile.Profile()
     # profiler.enable()
-    main()
+    performance()
     # profiler.disable()
     # stats = pstats.Stats(profiler).sort_stats("cumulative")
     # stats.print_stats(10)

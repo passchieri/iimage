@@ -31,7 +31,7 @@ class DebugWindow:
         cv2.imshow(self.name, self.canvas)
         cv2.waitKey(1) & 0xFF
 
-    def draw_image(self, image: np.ndarray, index: int = 0):
+    def draw_image(self, image: np.ndarray, index: int = 0, invert=True):
         if index >= self.count:
             raise ValueError(
                 f"Index {index} out of range. Max index is {self.count - 1}."
@@ -50,7 +50,13 @@ class DebugWindow:
             )
             h, w = image.shape[:2]
         if len(image.shape) == 2:  # grayscale
+            if image.dtype != np.uint8:
+                image = cv2.normalize(
+                    image, None, 0, 512, cv2.NORM_MINMAX, dtype=cv2.CV_8U
+                )
             image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        if invert:
+            image = cv2.bitwise_not(image)
         self.canvas[
             1 : h + 1, index * (self.width + 1) + 1 : index * (self.width + 1) + 1 + w
         ] = image

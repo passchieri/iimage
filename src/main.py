@@ -1,7 +1,7 @@
 import argparse
 import cProfile
 import pstats
-from iimage import Board
+from iimage import RandomBoard, SingleBoard
 import cv2
 import numpy as np
 from pathlib import Path
@@ -13,12 +13,23 @@ FILE = "tessa"
 
 def cli_main():
     parser = argparse.ArgumentParser(description="Run string art board generator.")
-    parser.add_argument("img_path", type=str, help="Path to the input image")
     parser.add_argument(
-        "--pins", type=int, default=201, help="Number of pins (default: 201)"
+        "--img_path",
+        type=str,
+        help="Path to the input image",
+        default="resources/igor passchier.jpg",
+    )
+    parser.add_argument(
+        "--pins", type=int, default=200, help="Number of pins (default: 200)"
     )
     parser.add_argument(
         "--straws", type=int, default=4000, help="Number of straws (default: 4000)"
+    )
+    parser.add_argument(
+        "--size",
+        type=int,
+        default=1200,
+        help="Size of the result picture (default: 1200)",
     )
     parser.add_argument(
         "--strategy",
@@ -28,10 +39,10 @@ def cli_main():
         help="Strategy to use: 'single' or 'random' (default: single)",
     )
     args = parser.parse_args()
-    main(args.img_path, args.pins, args.straws, args.strategy)
+    main(args.img_path, args.pins, args.straws, args.size, args.strategy)
 
 
-def main(img_path, pins=201, straws=4000, strategy="single"):
+def main(img_path, pins=201, straws=1000, result_size=1200, strategy="single"):
     FILE = Path(img_path).stem
     final = None
     debugger = DebugWindow(f"debug {strategy} {pins} {straws}", 400, 400, 3)
@@ -39,25 +50,26 @@ def main(img_path, pins=201, straws=4000, strategy="single"):
     img = cv2.imread(img_path)
     assert img is not None, "file could not be read, check with os.path.exists()"
     h, w = img.shape[:2]
-    scale = 1200 / max(h, w)
+    scale = result_size / max(h, w)
     if scale < 1:
         img = cv2.resize(
             img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA
         )
         h, w = img.shape[:2]
-    board = Board(
+    BoardClass = get_board_class(strategy)
+    board = BoardClass(
         img,
         operating_size=300,
-        strategy=strategy,
         pins=pins,
         straws=straws,
         thickness=1,
+        result_size=result_size,
     )
     debugger.draw_image(board.image, 0)
     debugger.draw_image(board.target, 1)
     board.reset_counter()
     board.calculate_q()
-    debugger.draw_image(board.result, 2)
+    debugger.draw_image(board.counter, 2)
     debugger.draw_image(board.diff, 0)
     temp = 0.02
     step_count = 1000
@@ -87,7 +99,7 @@ def main(img_path, pins=201, straws=4000, strategy="single"):
             board.straws = np.load(f"{FILE}_{board.pin_count}.npy")
             board.reset_counter()
             board.calculate_q()
-            debugger.draw_image(board.result, 2)
+            debugger.draw_image(board.counter, 2)
             debugger.draw_image(board.diff, 0)
             temp = 1e-6
         elif key == ord("r"):
@@ -101,7 +113,7 @@ def main(img_path, pins=201, straws=4000, strategy="single"):
                         c += 1
                         tc += 1
                 debugger.draw_image(board.diff, 0)
-                debugger.draw_image(board.result, 2)
+                debugger.draw_image(board.counter, 2)
                 print(
                     f"{c=}, {temp=:.4e}, {board.quality=:.4f}, length={board.total_straw_length():.0f}"
                 )
@@ -117,31 +129,38 @@ def main(img_path, pins=201, straws=4000, strategy="single"):
             print(key)
 
 
+def get_board_class(strategy):
+    if strategy == "random":
+        return RandomBoard
+    elif strategy == "single":
+        return SingleBoard
+    else:
+        raise ValueError(f"Unknown strategy: {strategy}")
+
+
 def make_final(final, img, board):
-    b = Board(
-        img,
-        operating_size=1200,
-        strategy=board.strategy,
-        pins=board.pin_count,
-        straws=board.straw_count,
-        thickness=board.thickness,
-    )
-    b.straws = board.straws.copy()
-    b.reset_counter()
-    b.calculate_q()
     if not final:
+        print(f"{board.result_size=}")
         final = DebugWindow(
-            f"Final {b.strategy} {b.pin_count} {b.straw_count}", 1200, 1200, 2
+            f"Final {board.__class__.__name__} {board.pin_count} {board.straw_count}",
+            board.result_size,
+            board.result_size,
+            2,
         )
-    final.draw_image(b.image, 0)
-    final.draw_image(b.result, 1)
-    return b, final
+    final.draw_image(img, 0, invert=False)
+    final.draw_image(board.draw_result(), 1, invert=False)
+    return board, final
+
+
+def f8(x):
+    return "%12.8f" % x
 
 
 if __name__ == "__main__":
-    # profiler = cProfile.Profile()
-    # profiler.enable()
+    profiler = cProfile.Profile()
+    profiler.enable()
     cli_main()
-    # profiler.disable()
-    # stats = pstats.Stats(profiler).sort_stats("cumulative")
-    # stats.print_stats(10)
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats("cumulative")
+    pstats.f8 = f8  # Increase precision for time columns
+    stats.print_stats("board.py")

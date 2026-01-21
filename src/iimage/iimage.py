@@ -2,7 +2,7 @@ from typing import Optional
 import numpy as np
 import cv2 as cv
 
-from .utils import line_circle_intersections
+from .utils import line_circle_intersections, polar_to_cartesian
 
 from .board import Board
 
@@ -84,4 +84,3 @@ def add_intensity_line(sample, draw_img):
     # color = (intensity, intensity, intensity)
     thickness = 1
     cv.line(draw_img, pt1, pt2, [0, 0, 0], thickness)
-

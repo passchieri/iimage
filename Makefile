@@ -43,6 +43,8 @@ publish_docs: $(DOCS)
 	wiki page upload "/Development/Tooling/Python based tooling/${PACKAGE_NAME}" "dist/doc/usage.md" --create_parents
 
 init:
+	[ -d src ] || mkdir src
+	[ -d test ] || mkdir test
 	pip install --upgrade pip
 	pip install -e .[dev]
 
